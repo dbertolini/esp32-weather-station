@@ -1,6 +1,6 @@
-# ESP32 WiFi Manager with Captive Portal & Modern UI
+# ESP32 WiFi Manager: Captive Portal with Modern UI & Multilingual Support
 
-This project is an advanced WiFi configuration manager for the ESP32. It allows you to easily configure network credentials through a professional and modern web interface, eliminating the need to hardcode SSIDs and passwords directly into your firmware.
+This is an advanced WiFi configuration manager for the ESP32, designed to provide a professional and seamless experience for the end user. It allows for easy network credential configuration through a modern web interface, eliminating the need to hardcode SSIDs and passwords.
 
 ## 🚀 Features
 
