@@ -561,92 +561,189 @@ void updateWeather() {
   }
 }
 
-void drawFuturisticDashboard() {
-  display.clearDisplay();
-  
-  struct tm timeinfo;
-  if(!getLocalTime(&timeinfo)){
-    // If no time yet, show simple loading
-    display.setCursor(10, 20);
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);
-    display.println("Syncing Time...");
-    display.display();
-    return;
-  }
+// --- New Helper Functions for OLED Screens ---
 
-  // --- TOP BAR (Yellow Zone approx 0-16px) ---
-  // Date: DD/MM/YYYY
+void drawHeader(struct tm timeinfo) {
+  // Yellow Zone (Top section) - used for persistent info
+  display.setTextColor(SSD1306_WHITE);
   display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE); // Actually Yellow on this screen hardware
-  display.setCursor(0, 0);
-  display.printf("%02d/%02d/%04d", timeinfo.tm_mday, timeinfo.tm_mon + 1, timeinfo.tm_year + 1900);
   
-  // Signal Icon (Fake bars logic)
+  // Date Left
+  display.setCursor(0, 0);
+  display.printf("%02d/%02d", timeinfo.tm_mday, timeinfo.tm_mon + 1);
+
+  // Time Center
+  display.setCursor(48, 0);
+  display.printf("%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+
+  // Battery (Placeholder) - Right side
+  int batLevel = 100;
+  display.drawRect(92, 0, 12, 7, SSD1306_WHITE);
+  display.fillRect(94, 2, (8*batLevel)/100, 3, SSD1306_WHITE);
+  display.fillRect(104, 2, 2, 3, SSD1306_WHITE); // Battery Tip
+
+  // Signal - Far Right
   long rssi = WiFi.RSSI();
   int bars = 0;
   if(rssi > -55) bars = 4;
   else if(rssi > -65) bars = 3;
   else if(rssi > -75) bars = 2;
   else if(rssi > -85) bars = 1;
-  
+
   for(int b=0; b<4; b++) {
-    // x starts at 110, width 3, gap 1
-    int h = (b+1)*3; 
-    if(b < bars) display.fillRect(110 + (b*4), 10 - h, 3, h, SSD1306_WHITE);
-    else display.drawRect(110 + (b*4), 10 - h, 3, h, SSD1306_WHITE);
+    int h = (b+1)*2; 
+    // x pos: 110 start, 3px width
+    if(b < bars) display.fillRect(110 + (b*3), 7 - h, 2, h, SSD1306_WHITE);
+    else display.drawRect(110 + (b*3), 7 - h, 2, h, SSD1306_WHITE);
   }
   
   // Separator Line
-  display.drawLine(0, 14, 128, 14, SSD1306_WHITE);
+  display.drawLine(0, 9, 128, 9, SSD1306_WHITE);
+}
 
-  // --- CENTER (Blue Zone) ---
-  // TIME HH:MM:SS
-  display.setTextSize(2); 
-  // Center alignment: (128 - 96) / 2 = 16px margin
-  int xTime = 16; 
-  int yTime = 20; // Moved up slightly
+void drawScreenWeather(float temp, int hum) {
+  // Futuristic Frame / Aesthetics
+  // Simple corners to mimic HUD
+  display.drawLine(0, 15, 10, 15, SSD1306_WHITE);
+  display.drawLine(0, 15, 0, 25, SSD1306_WHITE);
   
-  display.setCursor(xTime, yTime);
-  display.printf("%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+  display.drawLine(118, 15, 128, 15, SSD1306_WHITE);
+  display.drawLine(128, 15, 128, 25, SSD1306_WHITE);
 
-  // --- LAT / LON ---
+  // Title
   display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  int yGeo = 40;
-  display.setCursor(0, yGeo);
-  if (currentLat != "" && currentLon != "") {
-    display.printf("Lat:%s Lon:%s", currentLat.c_str(), currentLon.c_str());
-  } else {
-    display.printf("Locating...");
+  display.setCursor(45, 15);
+  display.print(F("CLIMA"));
+
+  // Data
+  display.setTextSize(2);
+  display.setCursor(10, 32);
+  display.printf("%.1fC", temp);
+
+  display.setTextSize(1);
+  display.setCursor(85, 40);
+  display.printf("H:%d%%", hum);
+}
+
+void drawScreenLocation(String lat, String lon) {
+  // HUD Crosshair Style
+  display.drawLine(64, 20, 64, 55, SSD1306_WHITE); // Vertical
+  display.drawLine(30, 38, 98, 38, SSD1306_WHITE); // Horizontal
+  display.drawCircle(64, 38, 8, SSD1306_WHITE);     // Target
+  
+  // Title (masked box)
+  display.fillRect(35, 13, 58, 10, SSD1306_BLACK); 
+  display.setCursor(40, 14);
+  display.print(F("UBICACION"));
+  
+  // Coords
+  display.setCursor(2, 54);
+  display.print(lat);
+  
+  display.setCursor(70, 54);
+  display.print(lon);
+}
+
+void drawScreenRain(int probs[4]) {
+  display.setCursor(15, 14);
+  display.print(F("PROB. LLUVIA (4d)"));
+  
+  // Bar Chart for 4 days
+  for(int i=0; i<4; i++) {
+    int val = probs[i];
+    int h = map(val, 0, 100, 0, 35); // max height 35px
+    int barWidth = 15;
+    int spacing = 10;
+    int x = 20 + (i * (barWidth + spacing));
+    int bottomY = 62;
+    
+    display.fillRect(x, bottomY - h, barWidth, h, SSD1306_WHITE);
+    
+    // Label
+    display.setCursor(x, bottomY - h - 10);
+    if(val > 0) display.print(val);
+  }
+}
+
+void drawScreenSystemInfo(struct tm timeinfo) {
+  // Full screen, NO HEADER
+  
+  // Large Time
+  display.setTextSize(2);
+  display.setCursor(16, 8);
+  display.printf("%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+  
+  // Date
+  display.setTextSize(1);
+  display.setCursor(30, 28);
+  display.printf("%02d/%02d/%04d", timeinfo.tm_mday, timeinfo.tm_mon + 1, timeinfo.tm_year + 1900);
+  
+  // WiFi Info
+  display.setCursor(5, 45);
+  display.print(F("WiFi: "));
+  display.print(WiFi.SSID().substring(0, 12)); // Truncate if too long
+  
+  display.setCursor(5, 55);
+  display.printf("Sig: %ld dBm  Bat: 100%%", WiFi.RSSI());
+}
+
+void drawFuturisticDashboard() {
+  static int currentScreen = 0;
+  static unsigned long lastScreenSwitch = 0;
+  unsigned long now = millis();
+  
+  // Cycle Logic (5 seconds per screen)
+  if (now - lastScreenSwitch > 5000) {
+    currentScreen++;
+    if(currentScreen > 3) currentScreen = 0;
+    lastScreenSwitch = now;
   }
 
-  // --- BOTTOM FOOTER ---
-  // Temp and Humidity
-  // small font again
-  display.setTextSize(1);
-  int yFooter = 54; // Moved down slightly
+  display.clearDisplay();
   
-  int yFooter = 54; // Moved down slightly
-  
-  if (weatherAvailable) {
-     display.setCursor(0, yFooter);
-     
-     // Cycle display every 4 seconds
-     // 0-4s: Temp + Hum
-     // 4-8s: Rain Forecast
-     unsigned long nowInfo = millis() / 4000;
-     
-     if (nowInfo % 2 == 0) {
-       display.printf("Temp: %.1fC", currentTemp);
-       display.setCursor(70, yFooter);
-       display.printf("Hum: %d%%", currentHumidity);
-     } else {
-       display.printf("Rain: %d%% %d%% %d%% %d%%", rainProb[0], rainProb[1], rainProb[2], rainProb[3]);
-     }
-  } else {
-     display.setCursor(0, yFooter);
-     display.print("Loading Weather...");
+  // Get Time
+  struct tm timeinfo;
+  bool timeSynced = getLocalTime(&timeinfo);
+  if(!timeSynced){
+    display.setCursor(20, 30);
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.println(F("Sincronizando..."));
+    display.display();
+    return;
+  }
+
+  // Draw Header (except for Info Screen 3)
+  if (currentScreen != 3) {
+    drawHeader(timeinfo);
+  }
+
+  // Draw Main Content
+  switch(currentScreen) {
+    case 0: // Temperature
+      if(weatherAvailable) drawScreenWeather(currentTemp, currentHumidity);
+      else {
+        display.setCursor(20, 30);
+        display.print(F("Cargando Clima..."));
+      }
+      break;
+    case 1: // Location
+      if(currentLat != "") drawScreenLocation(currentLat, currentLon);
+      else {
+        display.setCursor(20, 30);
+        display.print(F("Buscando Ubicacion..."));
+      }
+      break;
+    case 2: // Rain
+      if(weatherAvailable) drawScreenRain(rainProb);
+      else {
+        display.setCursor(20, 30);
+        display.print(F("Cargando Lluvia..."));
+      }
+      break;
+    case 3: // System Info (Full Screen)
+      drawScreenSystemInfo(timeinfo);
+      break;
   }
 
   display.display();
