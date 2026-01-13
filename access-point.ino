@@ -96,59 +96,43 @@ String city = "Buenos Aires"; // Default, will update via IP
 void drawConfigModeScreen(int frame) {
   display.clearDisplay();
 
-  // --- ZONA AMARILLA (Titulo) ---
+  // --- ZONA AMARILLA ---
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(15, 0); 
-  display.print(F("SETUP REQUERIDO")); // o "MODO CONFIGURACION"
+  display.print(F("SETUP REQUERIDO"));
 
-  // --- ZONA AZUL (Graficos) ---
-  // Subimos todo 8px para dejar espacio al texto doble abajo
-  
-  // 1. Icono Telefono (Izquierda)
-  // Original y=20. Nuevo y=12.
-  display.drawRoundRect(10, 12, 18, 32, 2, SSD1306_WHITE);
-  display.fillRect(12, 16, 14, 20, SSD1306_BLACK); // Pantalla negra
-  display.drawLine(17, 40, 21, 40, SSD1306_WHITE); // Boton home (y=48 -> 40)
-  // "App" en pantalla
-  display.fillRect(14, 20, 10, 2, SSD1306_WHITE);
-  display.fillRect(14, 24, 10, 2, SSD1306_WHITE);
+  display.setCursor(0, 10);
+  display.print(F("RED: Weather-Config")); // SSID en zona amarilla
 
-  // 2. Icono ESP32 / AP (Derecha)
-  // Original y=28. Nuevo y=20.
-  display.drawRect(90, 20, 24, 16, SSD1306_WHITE);
-  display.drawRect(92, 22, 4, 4, SSD1306_WHITE); 
-  // Antena
-  display.drawLine(102, 20, 102, 12, SSD1306_WHITE);
-  display.fillCircle(102, 11, 1, SSD1306_WHITE);
+  // --- GRAFICOS (Zona Azul) ---
+  // Icono Telefono
+  display.drawRoundRect(10, 24, 18, 22, 2, SSD1306_WHITE);
+  display.fillRect(12, 27, 14, 12, SSD1306_BLACK);
+  display.drawLine(17, 42, 21, 42, SSD1306_WHITE);
+
+  // Icono ESP32
+  display.drawRect(90, 32, 24, 14, SSD1306_WHITE);
+  display.drawLine(102, 32, 102, 24, SSD1306_WHITE);
+  display.fillCircle(102, 23, 1, SSD1306_WHITE);
   
-  // 3. Animacion de Flechas / Ondas
-  // frame 0..3
+  // Animacion
   int step = frame % 4;
-  int startX = 35;
-  int endX = 80;
-  
-  // Flecha animada moviendose
   for(int i=0; i<3; i++) {
-     int x = startX + (i*15) + (step * 3);
-     if(x < endX) {
-        // Dibujar Chevron >
-        // Original y=36. Nuevo y=28.
-        display.drawLine(x, 28, x+4, 28+4, SSD1306_WHITE);
-        display.drawLine(x+4, 28+4, x, 28+8, SSD1306_WHITE);
+     int x = 35 + (i*15) + (step * 3);
+     if(x < 80) {
+        display.drawLine(x, 34, x+4, 38, SSD1306_WHITE);
+        display.drawLine(x+4, 38, x, 42, SSD1306_WHITE);
      }
   }
 
-  // Texto Info (Abajo del todo)
-  display.setTextSize(1);
-  display.setCursor(0, 48);
-  display.print(F("RED: Weather-Station-Config")); // Sincronizado con setup
+  // Info abajo
   display.setCursor(0, 56);
   display.print(F("weatherstation.local"));
 
   display.display();
 }
-String currentLat = "";
+ String currentLat = "";
 String currentLon = "";
 int rainProb[5] = {0,0,0,0,0};
 
@@ -162,7 +146,7 @@ String getHTML(String title, String content, String script = "", bool showLang =
   String html = "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>";
   html += "<title>" + title + "</title>";
   html += "<style>";
-  html += ":root { --primary: #2563eb; --bg: #f3f4f6; --card: #ffffff; --text: #1f2937; }";
+  html += ":root { --primary: #eab308; --bg: #0f172a; --card: #1e293b; --text: #fef08a; }";
   html += "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }";
   html += ".card { background: var(--card); padding: 2rem; border-radius: 1rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }";
   html += "h1 { margin-top: 0; color: var(--primary); font-size: 1.5rem; margin-bottom: 1.5rem; }";
@@ -1023,12 +1007,11 @@ void setup() {
 void drawResetCountdown(int secondsLeft, unsigned long progress) {
   display.clearDisplay();
   
-  // Rellenar fondo para que la pantalla brille con sus colores (Amarillo arriba, Azul abajo)
-  display.fillRect(0, 0, 128, 64, SSD1306_WHITE);
-  display.setTextColor(SSD1306_BLACK);
+  // Background stays black (default after clearDisplay)
+  display.setTextColor(SSD1306_WHITE);
   
   // Borde interno
-  display.drawRoundRect(2, 2, 124, 60, 4, SSD1306_BLACK);
+  display.drawRoundRect(2, 2, 124, 60, 4, SSD1306_WHITE);
   
   // Título
   display.setTextSize(2); 
@@ -1046,13 +1029,13 @@ void drawResetCountdown(int secondsLeft, unsigned long progress) {
   int barX = 14;
   int barY = 48;
   
-  display.drawRect(barX, barY, barWidth, barHeight, SSD1306_BLACK);
+  display.drawRect(barX, barY, barWidth, barHeight, SSD1306_WHITE);
   
   int fillW = map(progress, 0, 5000, 0, barWidth-4);
   if(fillW < 0) fillW = 0;
   if(fillW > barWidth-4) fillW = barWidth-4;
   
-  display.fillRect(barX+2, barY+2, fillW, barHeight-4, SSD1306_BLACK);
+  display.fillRect(barX+2, barY+2, fillW, barHeight-4, SSD1306_WHITE);
 
   display.display();
 }
@@ -1088,6 +1071,7 @@ void handleResetButton() {
       
       // Update screen to say "RESETTING..."
       display.clearDisplay();
+      display.setTextColor(SSD1306_WHITE);
       display.setTextSize(2);
       display.setCursor(10, 25);
       display.print(F("BORRANDO..."));
