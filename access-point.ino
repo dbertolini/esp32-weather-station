@@ -149,7 +149,8 @@ int rainProb[4] = {0,0,0,0};
 
 
 // Forward declaration
-void handleNotFound(); 
+void handleNotFound();
+void startAP(); 
 
 // Helper to wrap content in a professional HTML structure
 String getHTML(String title, String content, String script = "", bool showLang = true) {
@@ -545,6 +546,7 @@ void updateWeather() {
                 }
                  Serial.printf("Rain Prob: %d%% %d%% %d%% %d%%\n", rainProb[0], rainProb[1], rainProb[2], rainProb[3]);
               }
+            }
             }
         } else {
            Serial.printf("OpenMeteo Error: %d\n", httpCode);
