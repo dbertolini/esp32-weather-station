@@ -103,22 +103,24 @@ void drawConfigModeScreen(int frame) {
   display.print(F("SETUP REQUERIDO")); // o "MODO CONFIGURACION"
 
   // --- ZONA AZUL (Graficos) ---
+  // Subimos todo 8px para dejar espacio al texto doble abajo
   
   // 1. Icono Telefono (Izquierda)
-  // Cuerpo
-  display.drawRoundRect(10, 20, 18, 32, 2, SSD1306_WHITE);
-  display.fillRect(12, 24, 14, 20, SSD1306_BLACK); // Pantalla negra
-  display.drawLine(17, 48, 21, 48, SSD1306_WHITE); // Boton home
+  // Original y=20. Nuevo y=12.
+  display.drawRoundRect(10, 12, 18, 32, 2, SSD1306_WHITE);
+  display.fillRect(12, 16, 14, 20, SSD1306_BLACK); // Pantalla negra
+  display.drawLine(17, 40, 21, 40, SSD1306_WHITE); // Boton home (y=48 -> 40)
   // "App" en pantalla
-  display.fillRect(14, 28, 10, 2, SSD1306_WHITE);
-  display.fillRect(14, 32, 10, 2, SSD1306_WHITE);
+  display.fillRect(14, 20, 10, 2, SSD1306_WHITE);
+  display.fillRect(14, 24, 10, 2, SSD1306_WHITE);
 
   // 2. Icono ESP32 / AP (Derecha)
-  display.drawRect(90, 28, 24, 16, SSD1306_WHITE);
-  display.drawRect(92, 30, 4, 4, SSD1306_WHITE); // Chip visual
+  // Original y=28. Nuevo y=20.
+  display.drawRect(90, 20, 24, 16, SSD1306_WHITE);
+  display.drawRect(92, 22, 4, 4, SSD1306_WHITE); 
   // Antena
-  display.drawLine(102, 28, 102, 20, SSD1306_WHITE);
-  display.fillCircle(102, 19, 1, SSD1306_WHITE);
+  display.drawLine(102, 20, 102, 12, SSD1306_WHITE);
+  display.fillCircle(102, 11, 1, SSD1306_WHITE);
   
   // 3. Animacion de Flechas / Ondas
   // frame 0..3
@@ -131,21 +133,24 @@ void drawConfigModeScreen(int frame) {
      int x = startX + (i*15) + (step * 3);
      if(x < endX) {
         // Dibujar Chevron >
-        display.drawLine(x, 36, x+4, 36+4, SSD1306_WHITE);
-        display.drawLine(x+4, 36+4, x, 36+8, SSD1306_WHITE);
+        // Original y=36. Nuevo y=28.
+        display.drawLine(x, 28, x+4, 28+4, SSD1306_WHITE);
+        display.drawLine(x+4, 28+4, x, 28+8, SSD1306_WHITE);
      }
   }
 
   // Texto Info (Abajo del todo)
   display.setTextSize(1);
-  display.setCursor(10, 56);
-  display.print(F("RED: ESP32-Config"));
+  display.setCursor(0, 48);
+  display.print(F("RED: Weather-Station-Config")); // Sincronizado con setup
+  display.setCursor(0, 56);
+  display.print(F("weatherstation.local"));
 
   display.display();
 }
 String currentLat = "";
 String currentLon = "";
-int rainProb[4] = {0,0,0,0};
+int rainProb[5] = {0,0,0,0,0};
 
 
 // Forward declaration
@@ -161,9 +166,11 @@ String getHTML(String title, String content, String script = "", bool showLang =
   html += "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }";
   html += ".card { background: var(--card); padding: 2rem; border-radius: 1rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }";
   html += "h1 { margin-top: 0; color: var(--primary); font-size: 1.5rem; margin-bottom: 1.5rem; }";
-  html += "input, select { width: 100%; padding: 0.75rem; margin-top: 0.5rem; margin-bottom: 1rem; border: 1px solid #d1d5db; border-radius: 0.5rem; box-sizing: border-box; font-size: 1rem; transition: border-color 0.2s; background: white; }";
-  html += "input:focus, select:focus { outline: none; border-color: var(--primary); ring: 2px solid rgba(37, 99, 235, 0.2); }";
+  html += "input[type=text], input[type=password], select { width: 100%; padding: 0.75rem; margin-top: 0.5rem; margin-bottom: 1rem; border: 1px solid #d1d5db; border-radius: 0.5rem; box-sizing: border-box; font-size: 1rem; transition: all 0.2s; background: white; }";
+  html += "input[type=checkbox], input[type=radio] { width: 1.25rem; height: 1.25rem; margin: 0; cursor: pointer; accent-color: var(--primary); }";
+  html += "input:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2); }";
   html += "label { font-weight: 600; font-size: 0.875rem; display: block; text-align: left; color: #4b5563; }";
+  html += ".opt-label { font-weight: normal; display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 0; border-bottom: 1px solid #f3f4f6; cursor: pointer; text-align: left; }";
   html += "button { width: 100%; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.5rem; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s; margin-top: 1rem; }";
   html += "button:hover { background: #1d4ed8; }";
   html += ".hidden { display: none; }";
@@ -320,6 +327,30 @@ int currentMode = MODE_OFF;
 unsigned long lastStrobeTime = 0;
 int strobeStep = 0; // 0: off, 1: first flash, 2: pause, 3: second flash, 4: long pause
 
+// --- Global Display Config ---
+int displayMode = 0; // 0=Cycle, 1=Static
+int staticScreenIndex = 0; 
+int enabledScreensMask = 31; // Default 11111 (All 5 screens enabled)
+
+void handleSetDisplayConfig() {
+  if (server.hasArg("mode") && server.hasArg("mask") && server.hasArg("static")) {
+      displayMode = server.arg("mode").toInt();
+      enabledScreensMask = server.arg("mask").toInt();
+      staticScreenIndex = server.arg("static").toInt();
+      
+      Preferences d_prefs;
+      d_prefs.begin("disp_cfg", false);
+      d_prefs.putInt("mode", displayMode);
+      d_prefs.putInt("mask", enabledScreensMask);
+      d_prefs.putInt("static", staticScreenIndex);
+      d_prefs.end();
+      
+      server.send(200, "text/plain", "OK");
+  } else {
+      server.send(400, "text/plain", "Missing args");
+  }
+}
+
 
 // Handler for setting LED mode
 void handleSetMode() {
@@ -366,6 +397,38 @@ void handleDashboard() {
   content += "<label class='switch'><input type='checkbox' id='sw_strobe' onchange='setMode(this.checked ? 2 : 0)' " + strobeState + "><span class='slider round'></span></label>";
   content += "</div>";
 
+  // -- Display Config Section --
+  content += "<h2 style='margin-top: 2rem; margin-bottom: 1rem; font-size: 1.25rem; color: var(--primary);' data-i18n='t_disp_cfg'>Display Settings</h2>"; 
+  
+  // Mode Selection (Radios)
+  content += "<div style='margin-bottom: 1.5rem; display: flex; gap: 1.5rem; justify-content: center;'>";
+  content += "  <label class='opt-label' style='border:none;'><input type='radio' name='d_mode' value='0' onchange='toggleDispMode()' " + String(displayMode == 0 ? "checked" : "") + "> <span data-i18n='l_cycle'>Cycle</span></label>";
+  content += "  <label class='opt-label' style='border:none;'><input type='radio' name='d_mode' value='1' onchange='toggleDispMode()' " + String(displayMode == 1 ? "checked" : "") + "> <span data-i18n='l_static'>Static</span></label>";
+  content += "</div>";
+
+  // Cycle Options (Checkboxes)
+  content += "<div id='cycle_opts' style='display: " + String(displayMode == 0 ? "block" : "none") + ";'>";
+  content += "<p style='font-size:0.875rem; color:#6b7280; margin-bottom:0.75rem; text-align:left;' data-i18n='msg_cycle'>Select screens to cycle:</p>";
+  String screens[5] = {"Clima", "Ubicacion", "Lluvia", "Fecha/Hora", "Estado"};
+  for(int i=0; i<5; i++) {
+     bool en = (enabledScreensMask >> i) & 1;
+     content += "<label class='opt-label'><input type='checkbox' class='chk_scr' value='" + String(i) + "' " + (en ? "checked" : "") + "> <span>" + screens[i] + "</span></label>";
+  }
+  content += "</div>";
+
+  // Static Option (Select)
+  content += "<div id='static_opts' style='display: " + String(displayMode == 1 ? "block" : "none") + ";'>";
+  content += "<p style='font-size:0.875rem; color:#6b7280; margin-bottom:0.75rem; text-align:left;' data-i18n='msg_static'>Select screen to show:</p>";
+  content += "<select id='sel_static' style='margin-top:0;'>";
+  for(int i=0; i<5; i++) {
+     content += "<option value='" + String(i) + "' " + (staticScreenIndex == i ? "selected" : "") + ">" + screens[i] + "</option>";
+  }
+  content += "</select>";
+  content += "</div>";
+  
+  content += "<button onclick='saveDispConfig()' data-i18n='b_save_disp' style='margin-top:1.5rem;'>Save Display Settings</button>";
+
+
   String script = "function setMode(m) {";
   // Mutually exclusive UI logic
   script += " if(m==1) document.getElementById('sw_strobe').checked = false;";
@@ -374,8 +437,29 @@ void handleDashboard() {
   script += " fetch('/set_mode?mode=' + m).then(r => r.text()).then(res => { console.log('Mode set to ' + res); });";
   script += "}";
   
+  script += "function toggleDispMode() {";
+  script += " const m = document.querySelector('input[name=\"d_mode\"]:checked').value;";
+  script += " document.getElementById('cycle_opts').style.display = (m=='0' ? 'block' : 'none');";
+  script += " document.getElementById('static_opts').style.display = (m=='1' ? 'block' : 'none');";
+  script += "}";
+
+  script += "function saveDispConfig() {";
+  script += " const m = document.querySelector('input[name=\"d_mode\"]:checked').value;";
+  script += " const s = document.getElementById('sel_static').value;";
+  script += " let mask = 0;";
+  script += " document.querySelectorAll('.chk_scr:checked').forEach(c => { mask |= (1 << c.value); });";
+  script += " const btn = document.querySelector('button[onclick=\"saveDispConfig()\"]'); const old = btn.innerHTML; btn.innerHTML='Saving...';";
+  script += " fetch('/set_display?mode='+m+'&mask='+mask+'&static='+s).then(r=>{ btn.innerHTML='Saved!'; setTimeout(()=>{btn.innerHTML=old}, 2000); });";
+  script += "}";
+  
   // Update dictionary with new keys
-  String extraDict = "<script>Object.assign(dict.en, {'l_strobe': 'Airplane Mode'});Object.assign(dict.es, {'l_strobe': 'Modo Avión'});Object.assign(dict.zh, {'l_strobe': '飞机模式'});Object.assign(dict.pt, {'l_strobe': 'Modo Avião'});Object.assign(dict.fr, {'l_strobe': 'Mode Avion'});</script>";
+  String extraDict = "<script>";
+  extraDict += "Object.assign(dict.en, {'l_strobe': 'Airplane Mode', 't_disp_cfg': 'Display Settings', 'l_cycle': 'Cycle Mode', 'l_static': 'Static Mode', 'msg_cycle': 'Select screens to show:', 'msg_static': 'Select screen to lock:', 'b_save_disp': 'Update Display'});";
+  extraDict += "Object.assign(dict.es, {'l_strobe': 'Modo Avión', 't_disp_cfg': 'Configuración Pantalla', 'l_cycle': 'Modo Carrusel', 'l_static': 'Modo Fijo', 'msg_cycle': 'Pantallas visibles:', 'msg_static': 'Pantalla fija:', 'b_save_disp': 'Actualizar Pantalla'});";
+  extraDict += "Object.assign(dict.zh, {'l_strobe': '飞机模式', 't_disp_cfg': '显示设置', 'l_cycle': '循环模式', 'l_static': '静态模式', 'msg_cycle': '选择显示的屏幕:', 'msg_static': '选择锁定的屏幕:', 'b_save_disp': '更新显示'});";
+  extraDict += "Object.assign(dict.pt, {'l_strobe': 'Modo Avião', 't_disp_cfg': 'Configurações de Tela', 'l_cycle': 'Modo Ciclo', 'l_static': 'Modo Estático', 'msg_cycle': 'Telas visíveis:', 'msg_static': 'Tela fixa:', 'b_save_disp': 'Atualizar Tela'});";
+  extraDict += "Object.assign(dict.fr, {'l_strobe': 'Mode Avion', 't_disp_cfg': 'Paramètres Écran', 'l_cycle': 'Mode Cycle', 'l_static': 'Mode Fixe', 'msg_cycle': 'Écrans visibles:', 'msg_static': 'Écran fixe:', 'b_save_disp': 'Mettre à jour'});";
+  extraDict += "</script>";
   
   server.send(200, "text/html", getHTML("Smart Dashboard", content + extraDict, script));
 }
@@ -418,8 +502,8 @@ void setupWiFi() {
     Serial.println(WiFi.localIP());
     
     // Start mDNS
-    if (MDNS.begin("control")) {
-      Serial.println("MDNS responder started. Access via http://control.local");
+    if (MDNS.begin("weatherstation")) {
+      Serial.println("MDNS responder started. Access via http://weatherstation.local");
     }
 
     digitalWrite(LED_PIN, HIGH);
@@ -427,6 +511,7 @@ void setupWiFi() {
     // Start Web Server for Dashboard in STA mode
     server.on("/", handleDashboard);
     server.on("/set_mode", handleSetMode);
+    server.on("/set_display", handleSetDisplayConfig);
     server.onNotFound(handleNotFound);
     server.begin();
     Serial.println("Dashboard Server Started");
@@ -538,13 +623,13 @@ void updateWeather() {
                 String arrContent = payload.substring(startArr+1, endArr);
                 // Simple parser for "0,20,50,0..."
                 int start = 0;
-                for(int i=0; i<4; i++) {
+                for(int i=0; i<5; i++) {
                   int comma = arrContent.indexOf(",", start);
                   if(comma == -1) comma = arrContent.length();
                   rainProb[i] = arrContent.substring(start, comma).toInt();
                   start = comma + 1;
                 }
-                 Serial.printf("Rain Prob: %d%% %d%% %d%% %d%%\n", rainProb[0], rainProb[1], rainProb[2], rainProb[3]);
+                 Serial.printf("Rain Prob: %d%% %d%% %d%% %d%% %d%%\n", rainProb[0], rainProb[1], rainProb[2], rainProb[3], rainProb[4]);
               }
             }
             }
@@ -598,31 +683,47 @@ void drawHeader(struct tm timeinfo) {
   }
   
   // Separator Line
-  display.drawLine(0, 9, 128, 9, SSD1306_WHITE);
+  display.drawLine(0, 12, 128, 12, SSD1306_WHITE);
 }
 
 void drawScreenWeather(float temp, int hum) {
-  // Futuristic Frame / Aesthetics
-  // Simple corners to mimic HUD
-  display.drawLine(0, 15, 10, 15, SSD1306_WHITE);
-  display.drawLine(0, 15, 0, 25, SSD1306_WHITE);
-  
-  display.drawLine(118, 15, 128, 15, SSD1306_WHITE);
-  display.drawLine(128, 15, 128, 25, SSD1306_WHITE);
-
   // Title
   display.setTextSize(1);
-  display.setCursor(45, 15);
+  display.setCursor(48, 16);
   display.print(F("CLIMA"));
 
-  // Data
+  // Thermometer position
+  int tx = 13;
+  int ty = 48;
+
+  // Data Temperatura
   display.setTextSize(2);
-  display.setCursor(10, 32);
+  display.setCursor(30, 32);
   display.printf("%.1fC", temp);
 
+  // Data Humedad
   display.setTextSize(1);
-  display.setCursor(85, 40);
-  display.printf("H:%d%%", hum);
+  display.setCursor(30, 52);
+  display.printf("Hum: %d%%", hum);
+
+  // Icono Termómetro detallado
+  display.fillCircle(tx, ty, 4, SSD1306_WHITE);
+  
+  // Stem (rounded top)
+  display.drawRoundRect(tx - 2, ty - 25, 5, 23, 2, SSD1306_WHITE);
+  
+  // Connect stem and bulb visually
+  display.fillRect(tx - 1, ty - 5, 3, 3, SSD1306_WHITE);
+  
+  // Mercury level inside stem (Mapping 0-50 C to 0-18 pixels height)
+  int level = map(constrain((int)temp, 0, 50), 0, 50, 0, 18);
+  display.fillRect(tx - 1, ty - level - 4, 3, level + 1, SSD1306_WHITE);
+  
+  // Temperature Ticks on the stem
+  for(int i=0; i<3; i++) {
+    int yTick = ty - 12 - (i * 6);
+    display.drawLine(tx + 4, yTick, tx + 6, yTick, SSD1306_WHITE);
+  }
 }
 
 void drawScreenLocation(String lat, String lon) {
@@ -632,8 +733,8 @@ void drawScreenLocation(String lat, String lon) {
   display.drawCircle(64, 38, 8, SSD1306_WHITE);     // Target
   
   // Title (masked box)
-  display.fillRect(35, 13, 58, 10, SSD1306_BLACK); 
-  display.setCursor(40, 14);
+  display.fillRect(35, 17, 58, 10, SSD1306_BLACK); 
+  display.setCursor(40, 18);
   display.print(F("UBICACION"));
   
   // Coords
@@ -644,47 +745,111 @@ void drawScreenLocation(String lat, String lon) {
   display.print(lon);
 }
 
-void drawScreenRain(int probs[4]) {
-  display.setCursor(15, 14);
-  display.print(F("PROB. LLUVIA (4d)"));
+void drawScreenRain(int probs[5]) {
+  display.setCursor(15, 18);
+  display.print(F("PROB. LLUVIA (5d)"));
   
-  // Bar Chart for 4 days
-  for(int i=0; i<4; i++) {
+  // Bar Chart for 5 days
+  for(int i=0; i<5; i++) {
     int val = probs[i];
     int h = map(val, 0, 100, 0, 35); // max height 35px
-    int barWidth = 15;
-    int spacing = 10;
-    int x = 20 + (i * (barWidth + spacing));
+    int barWidth = 12; // Narrower for 5 bars
+    int spacing = 8;
+    int x = 18 + (i * (barWidth + spacing));
     int bottomY = 62;
     
     display.fillRect(x, bottomY - h, barWidth, h, SSD1306_WHITE);
     
-    // Label
-    display.setCursor(x, bottomY - h - 10);
-    if(val > 0) display.print(val);
+    // Label (Only show >0 to avoid clutter)
+    if(val > 0) {
+      display.setCursor(x, bottomY - h - 10);
+      display.print(val);
+    }
   }
 }
 
-void drawScreenSystemInfo(struct tm timeinfo) {
-  // Full screen, NO HEADER
-  
-  // Large Time
-  display.setTextSize(2);
-  display.setCursor(16, 8);
-  display.printf("%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-  
-  // Date
+void drawScreenTime(struct tm timeinfo) {
+  // NO HEADER - Full Screen control
+  // Date in Yellow Zone (Top 16px)
   display.setTextSize(1);
-  display.setCursor(30, 28);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(34, 4); // Centered
   display.printf("%02d/%02d/%04d", timeinfo.tm_mday, timeinfo.tm_mon + 1, timeinfo.tm_year + 1900);
+
+  // --- Analog Clock in Blue Zone (y > 16) ---
+  int cx = 32;
+  int cy = 42; 
+  int r = 18;
+
+  // Clock Frame
+  display.drawCircle(cx, cy, r, SSD1306_WHITE);
+  display.fillCircle(cx, cy, 2, SSD1306_WHITE); // Center hub
+
+  // Ticks (12, 3, 6, 9)
+  display.drawPixel(cx, cy-r, SSD1306_WHITE); 
+  display.drawPixel(cx+r, cy, SSD1306_WHITE); 
+  display.drawPixel(cx, cy+r, SSD1306_WHITE); 
+  display.drawPixel(cx-r, cy, SSD1306_WHITE); 
+
+  // Calculate Angles (Adjusting so 0 is 12 o'clock)
+  // 30 degrees per hour, 6 degrees per minute
+  float hAngle = ((timeinfo.tm_hour % 12) + timeinfo.tm_min / 60.0) * 30.0; 
+  hAngle = (hAngle - 90) * 0.0174532925; // Convert degrees to radians
+
+  float mAngle = (timeinfo.tm_min) * 6.0; 
+  mAngle = (mAngle - 90) * 0.0174532925;
+
+  // Draw Hands
+  // Hour hand (shorter)
+  display.drawLine(cx, cy, cx + cos(hAngle) * (r * 0.6), cy + sin(hAngle) * (r * 0.6), SSD1306_WHITE);
+  
+  // Minute hand (longer)
+  display.drawLine(cx, cy, cx + cos(mAngle) * (r * 0.9), cy + sin(mAngle) * (r * 0.9), SSD1306_WHITE);
+
+  // Digital Time on the Right
+  display.setTextSize(2);
+  display.setCursor(64, 34); 
+  display.printf("%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+}
+
+void drawScreenStatus() {
+  // WITH HEADER - Start content at y=17
   
   // WiFi Info
-  display.setCursor(5, 45);
-  display.print(F("WiFi: "));
-  display.print(WiFi.SSID().substring(0, 12)); // Truncate if too long
+  display.setTextSize(1);
+  display.setCursor(0, 18);
+  display.print(F("RED: "));
+  String s = WiFi.SSID();
+  if(s.length() > 10) s = s.substring(0, 10) + "..";
+  display.print(s);
+
+  // Signal Section
+  display.setCursor(0, 35);
+  display.print(F("WIFI:"));
   
-  display.setCursor(5, 55);
-  display.printf("Sig: %ld dBm  Bat: 100%%", WiFi.RSSI());
+  long rssi = WiFi.RSSI();
+  int bars = 0;
+  if(rssi > -60) bars = 5;
+  else if(rssi > -70) bars = 4;
+  else if(rssi > -80) bars = 3;
+  else if(rssi > -90) bars = 2;
+  else bars = 1;
+
+  for(int i=0; i<5; i++) {
+     int h = 4 + (i*2); 
+     int x = 35 + (i*5);
+     int y = 45; // Bottom aligned-ish
+     if(i < bars) display.fillRect(x, y - h, 3, h, SSD1306_WHITE);
+     else display.drawRect(x, y - h, 3, h, SSD1306_WHITE);
+  }
+  
+  // Battery Section
+  display.setCursor(70, 35);
+  display.print(F("BAT:"));
+  // Battery Icon
+  display.drawRect(95, 34, 20, 10, SSD1306_WHITE);
+  display.fillRect(97, 36, 16, 6, SSD1306_WHITE); // 100% fixed
+  display.fillRect(115, 36, 2, 6, SSD1306_WHITE); // Tip
 }
 
 void drawFuturisticDashboard() {
@@ -692,11 +857,24 @@ void drawFuturisticDashboard() {
   static unsigned long lastScreenSwitch = 0;
   unsigned long now = millis();
   
-  // Cycle Logic (5 seconds per screen)
-  if (now - lastScreenSwitch > 5000) {
-    currentScreen++;
-    if(currentScreen > 3) currentScreen = 0;
-    lastScreenSwitch = now;
+  if (displayMode == 1) { // Static Mode
+     currentScreen = staticScreenIndex;
+  } else { // Cycle Mode
+      // Cycle Logic (5 seconds per screen)
+      if (now - lastScreenSwitch > 5000) {
+        int nextScreen = currentScreen;
+        for(int i=0; i<5; i++) { // Try up to 5 times (all screens)
+            nextScreen++;
+            if(nextScreen > 4) nextScreen = 0;
+            
+            // Check bitmask: (mask >> screen_idx) & 1
+            if ((enabledScreensMask >> nextScreen) & 1) {
+                currentScreen = nextScreen;
+                break;
+            }
+        }
+        lastScreenSwitch = now;
+      }
   }
 
   display.clearDisplay();
@@ -713,7 +891,7 @@ void drawFuturisticDashboard() {
     return;
   }
 
-  // Draw Header (except for Info Screen 3)
+  // Draw Header (For all except Time screen which is #3)
   if (currentScreen != 3) {
     drawHeader(timeinfo);
   }
@@ -741,8 +919,11 @@ void drawFuturisticDashboard() {
         display.print(F("Cargando Lluvia..."));
       }
       break;
-    case 3: // System Info (Full Screen)
-      drawScreenSystemInfo(timeinfo);
+    case 3: // Time & Date (Custom Layout)
+      drawScreenTime(timeinfo);
+      break;
+    case 4: // Status (Battery/Signal)
+      drawScreenStatus();
       break;
   }
 
@@ -754,10 +935,17 @@ void startAP() {
   performScan();
 
   WiFi.mode(WIFI_AP);
-  WiFi.softAP("ESP32-Config", ""); // Open AP, no password
-  Serial.println("AP Started: ESP32-Config");
+  WiFi.softAP("Weather-Station-Config", ""); // Open AP, no password
+  Serial.println("AP Started: Weather-Station-Config");
   Serial.print("AP IP Address: ");
   Serial.println(WiFi.softAPIP());
+  
+  if(MDNS.begin("weatherstation")) {
+    Serial.println("MDNS responder started");
+    MDNS.addService("http", "tcp", 80);
+  } else {
+    Serial.println("Error setting up MDNS responder!");
+  }
 
   // Setup DNS Server to redirect all domains to local IP
   dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
@@ -805,6 +993,14 @@ void setup() {
   io_prefs.begin("io_config", true); // Read-only
   currentMode = io_prefs.getInt("led_mode", MODE_OFF); 
   io_prefs.end();
+
+  // Load Display Config
+  Preferences d_prefs;
+  d_prefs.begin("disp_cfg", true);
+  displayMode = d_prefs.getInt("mode", 0);
+  enabledScreensMask = d_prefs.getInt("mask", 31);
+  staticScreenIndex = d_prefs.getInt("static", 0);
+  d_prefs.end();
   
   // Apply initial state
   if (currentMode == MODE_STEADY) digitalWrite(CONTROL_PIN, HIGH);
@@ -822,7 +1018,48 @@ void setup() {
   setupWiFi();
 }
 
+// Function to draw reset countdown
+// Function to draw reset countdown
+void drawResetCountdown(int secondsLeft, unsigned long progress) {
+  display.clearDisplay();
+  
+  // Rellenar fondo para que la pantalla brille con sus colores (Amarillo arriba, Azul abajo)
+  display.fillRect(0, 0, 128, 64, SSD1306_WHITE);
+  display.setTextColor(SSD1306_BLACK);
+  
+  // Borde interno
+  display.drawRoundRect(2, 2, 124, 60, 4, SSD1306_BLACK);
+  
+  // Título
+  display.setTextSize(2); 
+  display.setCursor(34, 8); 
+  display.print(F("RESET"));
+
+  // Número de cuenta regresiva
+  display.setTextSize(2);
+  display.setCursor(40, 28);
+  display.printf("en %ds", secondsLeft);
+
+  // Barra de progreso
+  int barWidth = 100;
+  int barHeight = 8;
+  int barX = 14;
+  int barY = 48;
+  
+  display.drawRect(barX, barY, barWidth, barHeight, SSD1306_BLACK);
+  
+  int fillW = map(progress, 0, 5000, 0, barWidth-4);
+  if(fillW < 0) fillW = 0;
+  if(fillW > barWidth-4) fillW = barWidth-4;
+  
+  display.fillRect(barX+2, barY+2, fillW, barHeight-4, SSD1306_BLACK);
+
+  display.display();
+}
+
 void handleResetButton() {
+  const unsigned long RESET_TIME_MS = 5000;
+
   // Check for Factory Reset (Pin 4 to GND)
   if (digitalRead(RESET_PIN) == LOW) {
     if (!buttonPressed) {
@@ -831,12 +1068,30 @@ void handleResetButton() {
       Serial.println("Boton de reset detectado...");
     }
     
+    unsigned long elapsed = millis() - buttonPressStartTime;
+    
     // Feedback visual inmediato: Apagar LED mientras se presiona
     digitalWrite(LED_PIN, LOW); 
+    
+    // Show countdown on screen
+    int secondsLeft = (RESET_TIME_MS - elapsed + 999) / 1000;
+    if(secondsLeft < 0) secondsLeft = 0;
+    
+    // Only draw if we haven't triggered yet
+    if (elapsed <= RESET_TIME_MS) {
+       drawResetCountdown(secondsLeft, elapsed);
+    }
 
-    // If held for 3 seconds, reset WiFi credentials
-    if (millis() - buttonPressStartTime > 3000) {
+    // If held for 5 seconds, reset WiFi credentials
+    if (elapsed > RESET_TIME_MS) {
       Serial.println("\nResetting WiFi Credentials...");
+      
+      // Update screen to say "RESETTING..."
+      display.clearDisplay();
+      display.setTextSize(2);
+      display.setCursor(10, 25);
+      display.print(F("BORRANDO..."));
+      display.display();
       
       // Blink LED rapidly to indicate reset action
       for (int i = 0; i < 10; i++) {
@@ -860,9 +1115,14 @@ void handleResetButton() {
       ESP.restart();
     }
   } else {
-    // If button is released before 3 seconds, reset state
+    /* If button is released before 5 seconds, reset state */
+    // Also clear the display to remove the "RESET en X" message immediately
     if (buttonPressed) {
-      Serial.println("Reset cancelado (boton soltado).");
+      Serial.println("Reset cancelado (boton soltado).");      
+      buttonPressed = false; 
+      // Force screen clear so we don't see the countdown stuck
+      display.clearDisplay();
+      display.display();
     }
     buttonPressed = false;
   }
