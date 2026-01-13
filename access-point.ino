@@ -3,6 +3,70 @@
 #include <Preferences.h>
 #include <DNSServer.h>
 #include <ESPmDNS.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include <time.h>
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET    -1 
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// Function to draw a dynamic WiFi connecting animation
+void drawConnectingAnimation(int frame) {
+  display.clearDisplay();
+  
+  // --- YELLOW ZONE (Top 16px) ---
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  
+  // Centered text
+  display.setCursor(34, 4);
+  display.print(F("CONECTANDO"));
+  
+  // --- BLUE ZONE (Bottom 48px) ---
+  // Draw Antenna Base at bottom center
+  int cx = 64;
+  int cy = 55;
+  
+  // Antenna Pole/Base
+  display.fillCircle(cx, cy, 2, SSD1306_WHITE);
+  display.drawLine(cx, cy, cx, cy+8, SSD1306_WHITE); // Stick down
+  
+  // Signal Waves (Arcs)
+  // We simulate arcs by drawing circles and blocking the bottom half
+  
+  // Wave 1
+  if (frame >= 1) {
+    display.drawCircle(cx, cy, 10, SSD1306_WHITE);
+    display.drawCircle(cx, cy, 11, SSD1306_WHITE); // Thicker
+  }
+  
+  // Wave 2
+  if (frame >= 2) {
+    display.drawCircle(cx, cy, 20, SSD1306_WHITE);
+    display.drawCircle(cx, cy, 21, SSD1306_WHITE);
+  }
+  
+  // Wave 3 (Reaches towards Yellow zone)
+  if (frame >= 3) {
+    display.drawCircle(cx, cy, 30, SSD1306_WHITE);
+    display.drawCircle(cx, cy, 31, SSD1306_WHITE);
+  }
+
+  // Obscure the bottom half of the circles to create "Dish/Wave" look
+  // Draw black rectangle below the center point
+  display.fillRect(0, cy + 3, 128, 30, SSD1306_BLACK);
+  
+  // Redraw base to be sure it's on top if needed (though we cut below it)
+  // Actually the cut (cy+3) might cut the base circle (radius 2). 
+  // Base is at cy. cy+3 is fine.
+  
+  display.display();
+}
 
 const int LED_PIN = 2;
 WebServer server(80);
@@ -11,7 +75,78 @@ Preferences preferences;
 
 String ssid = "";
 String password = "";
+
 String networksHTML = ""; // Cache for scan results
+
+// --- Global Variables for Time & Weather ---
+const char* ntpServer = "pool.ntp.org";
+const long  gmtOffset_sec = -10800; // GMT-3 (Argentina)
+const int   daylightOffset_sec = 0; 
+
+// Weather Data
+float currentTemp = 0.0;
+int currentHumidity = 0;
+unsigned long lastWeatherUpdate = 0;
+const unsigned long WEATHER_INTERVAL = 900000; // 15 minutes
+bool weatherAvailable = false;
+String city = "Buenos Aires"; // Default, will update via IP
+
+// Pantalla para modo Configuración (AP)
+// Muestra icono de Telefono -> WiFi -> Chip
+void drawConfigModeScreen(int frame) {
+  display.clearDisplay();
+
+  // --- ZONA AMARILLA (Titulo) ---
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(15, 0); 
+  display.print(F("SETUP REQUERIDO")); // o "MODO CONFIGURACION"
+
+  // --- ZONA AZUL (Graficos) ---
+  
+  // 1. Icono Telefono (Izquierda)
+  // Cuerpo
+  display.drawRoundRect(10, 20, 18, 32, 2, SSD1306_WHITE);
+  display.fillRect(12, 24, 14, 20, SSD1306_BLACK); // Pantalla negra
+  display.drawLine(17, 48, 21, 48, SSD1306_WHITE); // Boton home
+  // "App" en pantalla
+  display.fillRect(14, 28, 10, 2, SSD1306_WHITE);
+  display.fillRect(14, 32, 10, 2, SSD1306_WHITE);
+
+  // 2. Icono ESP32 / AP (Derecha)
+  display.drawRect(90, 28, 24, 16, SSD1306_WHITE);
+  display.drawRect(92, 30, 4, 4, SSD1306_WHITE); // Chip visual
+  // Antena
+  display.drawLine(102, 28, 102, 20, SSD1306_WHITE);
+  display.fillCircle(102, 19, 1, SSD1306_WHITE);
+  
+  // 3. Animacion de Flechas / Ondas
+  // frame 0..3
+  int step = frame % 4;
+  int startX = 35;
+  int endX = 80;
+  
+  // Flecha animada moviendose
+  for(int i=0; i<3; i++) {
+     int x = startX + (i*15) + (step * 3);
+     if(x < endX) {
+        // Dibujar Chevron >
+        display.drawLine(x, 36, x+4, 36+4, SSD1306_WHITE);
+        display.drawLine(x+4, 36+4, x, 36+8, SSD1306_WHITE);
+     }
+  }
+
+  // Texto Info (Abajo del todo)
+  display.setTextSize(1);
+  display.setCursor(10, 56);
+  display.print(F("RED: ESP32-Config"));
+
+  display.display();
+}
+String currentLat = "";
+String currentLon = "";
+int rainProb[4] = {0,0,0,0};
+
 
 // Forward declaration
 void handleNotFound(); 
@@ -176,23 +311,39 @@ void handleSave() {
   }
 }
 
-const int CONTROL_PIN = 5; // User requested Pin 5
+const int CONTROL_PIN = 5; 
+enum LedMode { MODE_OFF = 0, MODE_STEADY = 1, MODE_STROBE = 2 };
+int currentMode = MODE_OFF;
+
+// Variables for Strobe effect
+unsigned long lastStrobeTime = 0;
+int strobeStep = 0; // 0: off, 1: first flash, 2: pause, 3: second flash, 4: long pause
 
 
-// Handler for toggling pins via API
-void handleToggle() {
-  if (server.hasArg("pin")) {
-    int pin = server.arg("pin").toInt();
-    // Only allow our control pin
-    if (pin == CONTROL_PIN) { 
-        int state = digitalRead(pin);
-        digitalWrite(pin, !state);
-        server.send(200, "text/plain", String(!state));
+// Handler for setting LED mode
+void handleSetMode() {
+  if (server.hasArg("mode")) {
+    int newMode = server.arg("mode").toInt();
+    if (newMode >= 0 && newMode <= 2) {
+        currentMode = newMode;
+        
+        // Persist new mode
+        Preferences io_prefs;
+        io_prefs.begin("io_config", false);
+        io_prefs.putInt("led_mode", currentMode);
+        io_prefs.end();
+
+        // Immediate reaction for Steady/Off to feel responsive
+        if (currentMode == MODE_OFF) digitalWrite(CONTROL_PIN, LOW);
+        else if (currentMode == MODE_STEADY) digitalWrite(CONTROL_PIN, HIGH);
+        // Strobe is handled in loop()
+
+        server.send(200, "text/plain", String(currentMode));
     } else {
-        server.send(400, "text/plain", "Invalid Pin");
+        server.send(400, "text/plain", "Invalid Mode");
     }
   } else {
-    server.send(400, "text/plain", "Missing Pin");
+    server.send(400, "text/plain", "Missing Mode");
   }
 }
 
@@ -200,16 +351,32 @@ void handleToggle() {
 void handleDashboard() {
   String content = "<h1 data-i18n='t_dash'>Smart Control</h1>";
   
-  // Card for CONTROL_PIN (Pin 4)
+  // -- Switch 1: Steady Mode --
   content += "<div style='display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding:10px 0;'>";
-  content += "<div style='text-align:left;'><div><strong data-i18n='l_led'>Main LED</strong></div><div style='font-size:0.8rem; color:#666;'>GPIO " + String(CONTROL_PIN) + "</div></div>";
-  String ledState = digitalRead(CONTROL_PIN) ? "checked" : "";
-  content += "<label class='switch'><input type='checkbox' onchange='toggle(" + String(CONTROL_PIN) + ", this)' " + ledState + "><span class='slider round'></span></label>";
+  content += "<div style='text-align:left;'><div><strong data-i18n='l_led'>Main LED</strong></div><div style='font-size:0.8rem; color:#666;'>Continuous</div></div>";
+  String steadyState = (currentMode == MODE_STEADY) ? "checked" : "";
+  content += "<label class='switch'><input type='checkbox' id='sw_steady' onchange='setMode(this.checked ? 1 : 0)' " + steadyState + "><span class='slider round'></span></label>";
   content += "</div>";
 
-  String script = "function toggle(pin, el) { fetch('/toggle?pin=' + pin).then(r => r.text()).then(state => { console.log('Pin ' + pin + ' is now ' + state); }); }";
+  // -- Switch 2: Strobe Mode (Airplane) --
+  content += "<div style='display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding:10px 0;'>";
+  content += "<div style='text-align:left;'><div><strong data-i18n='l_strobe'>Airplane Mode</strong></div><div style='font-size:0.8rem; color:#666;'>Strobe Effect</div></div>";
+  String strobeState = (currentMode == MODE_STROBE) ? "checked" : "";
+  content += "<label class='switch'><input type='checkbox' id='sw_strobe' onchange='setMode(this.checked ? 2 : 0)' " + strobeState + "><span class='slider round'></span></label>";
+  content += "</div>";
+
+  String script = "function setMode(m) {";
+  // Mutually exclusive UI logic
+  script += " if(m==1) document.getElementById('sw_strobe').checked = false;";
+  script += " if(m==2) document.getElementById('sw_steady').checked = false;";
+  // API Call
+  script += " fetch('/set_mode?mode=' + m).then(r => r.text()).then(res => { console.log('Mode set to ' + res); });";
+  script += "}";
   
-  server.send(200, "text/html", getHTML("Smart Dashboard", content, script));
+  // Update dictionary with new keys
+  String extraDict = "<script>Object.assign(dict.en, {'l_strobe': 'Airplane Mode'});Object.assign(dict.es, {'l_strobe': 'Modo Avión'});Object.assign(dict.zh, {'l_strobe': '飞机模式'});Object.assign(dict.pt, {'l_strobe': 'Modo Avião'});Object.assign(dict.fr, {'l_strobe': 'Mode Avion'});</script>";
+  
+  server.send(200, "text/html", getHTML("Smart Dashboard", content + extraDict, script));
 }
 
 void handleNotFound() {
@@ -234,9 +401,13 @@ void setupWiFi() {
   Serial.print("Connecting to WiFi");
   
   // Wait for connection for up to 10 seconds
+  // Wait for connection for up to 10 seconds
   unsigned long startAttemptTime = millis();
+  int frame = 0;
   while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 10000) {
-    delay(500);
+    drawConnectingAnimation(frame);
+    frame = (frame + 1) % 4;
+    delay(250);
     Serial.print(".");
   }
 
@@ -254,14 +425,229 @@ void setupWiFi() {
     
     // Start Web Server for Dashboard in STA mode
     server.on("/", handleDashboard);
-    server.on("/toggle", handleToggle);
+    server.on("/set_mode", handleSetMode);
     server.onNotFound(handleNotFound);
     server.begin();
     Serial.println("Dashboard Server Started");
+
+    
+    // Init Time
+    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    Serial.println("Time configured");
   } else {
     Serial.println("\nFailed to connect. Starting AP mode.");
     startAP();
   }
+}
+
+// --- Helper Functions for Weather & Display ---
+
+void updateWeather() {
+  if(WiFi.status() == WL_CONNECTED) {
+    // 1. Get Location (HTTP)
+    // Use proper WiFiClient to prevent heap issues with implicit client reuse
+    WiFiClient client;
+    HTTPClient http;
+    
+    // Defaulting to Buenos Aires approx if fails
+    // Defaulting to Buenos Aires approx if fails
+    // String lat = "-34.6"; // Removed local var
+    // String lon = "-58.4"; // Removed local var
+    // using globals currentLat / currentLon instad
+    
+    // Serial debugging
+    Serial.println("Fetching Location from IP-API...");
+    
+    if (http.begin(client, "http://ip-api.com/json/?fields=lat,lon")) {
+       int httpCode = http.GET();
+       if (httpCode > 0) {
+         String payload = http.getString();
+         Serial.println("Got Location Payload");
+         
+         int latIdx = payload.indexOf("\"lat\":");
+         int lonIdx = payload.indexOf("\"lon\":");
+         
+         if(latIdx > 0 && lonIdx > 0) {
+            int comma1 = payload.indexOf(",", latIdx);
+            if (comma1 > 0) currentLat = payload.substring(latIdx + 6, comma1);
+            
+            int comma2 = payload.indexOf("}", lonIdx); 
+            if(comma2 < 0) comma2 = payload.indexOf(",", lonIdx);
+            if (comma2 > 0) currentLon = payload.substring(lonIdx + 6, comma2);
+         }
+       } else {
+         Serial.printf("IP-API Error: %d\n", httpCode);
+       }
+       http.end();
+    } else {
+       Serial.println("Unable to connect to IP-API");
+    }
+
+    // 2. Get Weather (HTTPS) - ONLY if we have a location
+    if (currentLat != "" && currentLon != "") {
+      Serial.println("Fetching Weather from Open-Meteo...");
+      WiFiClientSecure clientSecure;
+      clientSecure.setInsecure(); // Skip certificate verification
+      
+      String weatherURL = "https://api.open-meteo.com/v1/forecast?latitude=" + currentLat + "&longitude=" + currentLon + "&current=temperature_2m,relative_humidity_2m&daily=precipitation_probability_max&timezone=auto";
+    
+    // Create new HTTPClient to be safe
+    HTTPClient https;
+    if (https.begin(clientSecure, weatherURL)) {
+        int httpCode = https.GET();
+        if (httpCode > 0) {
+          String payload = https.getString();
+          Serial.println("Got Weather Payload");
+          
+          int currentBlock = payload.indexOf("\"current\":{");
+          if (currentBlock > 0) {
+            int tempIdx = payload.indexOf("\"temperature_2m\":", currentBlock);
+            int humIdx = payload.indexOf("\"relative_humidity_2m\":", currentBlock);
+            
+            if (tempIdx > 0 && humIdx > 0) {
+               // Robust parsing by finding the colon
+               int colonT = payload.indexOf(":", tempIdx);
+               int commaT = payload.indexOf(",", colonT);
+               if (colonT > 0 && commaT > 0) {
+                   String tStr = payload.substring(colonT + 1, commaT);
+                   currentTemp = tStr.toFloat();
+               }
+               
+               int colonH = payload.indexOf(":", humIdx);
+               int endBrace = payload.indexOf("}", colonH);
+               if (colonH > 0 && endBrace > 0) {
+                   String hStr = payload.substring(colonH + 1, endBrace);
+                   currentHumidity = hStr.toInt();
+                   
+                   weatherAvailable = true;
+                   lastWeatherUpdate = millis();
+                   Serial.printf("Weather Updated: %.1fC %d%%\n", currentTemp, currentHumidity);
+               }
+            }
+          }
+          
+          // Parse Daily Rain Probability
+          int dailyBlock = payload.indexOf("\"daily\":");
+          if (dailyBlock > 0) {
+            int probIdx = payload.indexOf("\"precipitation_probability_max\":", dailyBlock);
+            if (probIdx > 0) {
+              int startArr = payload.indexOf("[", probIdx);
+              int endArr = payload.indexOf("]", startArr);
+              if (startArr > 0 && endArr > 0) {
+                String arrContent = payload.substring(startArr+1, endArr);
+                // Simple parser for "0,20,50,0..."
+                int start = 0;
+                for(int i=0; i<4; i++) {
+                  int comma = arrContent.indexOf(",", start);
+                  if(comma == -1) comma = arrContent.length();
+                  rainProb[i] = arrContent.substring(start, comma).toInt();
+                  start = comma + 1;
+                }
+                 Serial.printf("Rain Prob: %d%% %d%% %d%% %d%%\n", rainProb[0], rainProb[1], rainProb[2], rainProb[3]);
+              }
+            }
+        } else {
+           Serial.printf("OpenMeteo Error: %d\n", httpCode);
+        }
+        https.end();
+    } else {
+        Serial.println("Unable to connect to OpenMeteo");
+    }
+  } else {
+      Serial.println("No valid location yet, skipping weather.");
+  }
+  }
+}
+
+void drawFuturisticDashboard() {
+  display.clearDisplay();
+  
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)){
+    // If no time yet, show simple loading
+    display.setCursor(10, 20);
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.println("Syncing Time...");
+    display.display();
+    return;
+  }
+
+  // --- TOP BAR (Yellow Zone approx 0-16px) ---
+  // Date: DD/MM/YYYY
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE); // Actually Yellow on this screen hardware
+  display.setCursor(0, 0);
+  display.printf("%02d/%02d/%04d", timeinfo.tm_mday, timeinfo.tm_mon + 1, timeinfo.tm_year + 1900);
+  
+  // Signal Icon (Fake bars logic)
+  long rssi = WiFi.RSSI();
+  int bars = 0;
+  if(rssi > -55) bars = 4;
+  else if(rssi > -65) bars = 3;
+  else if(rssi > -75) bars = 2;
+  else if(rssi > -85) bars = 1;
+  
+  for(int b=0; b<4; b++) {
+    // x starts at 110, width 3, gap 1
+    int h = (b+1)*3; 
+    if(b < bars) display.fillRect(110 + (b*4), 10 - h, 3, h, SSD1306_WHITE);
+    else display.drawRect(110 + (b*4), 10 - h, 3, h, SSD1306_WHITE);
+  }
+  
+  // Separator Line
+  display.drawLine(0, 14, 128, 14, SSD1306_WHITE);
+
+  // --- CENTER (Blue Zone) ---
+  // TIME HH:MM:SS
+  display.setTextSize(2); 
+  // Center alignment: (128 - 96) / 2 = 16px margin
+  int xTime = 16; 
+  int yTime = 20; // Moved up slightly
+  
+  display.setCursor(xTime, yTime);
+  display.printf("%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+
+  // --- LAT / LON ---
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  int yGeo = 40;
+  display.setCursor(0, yGeo);
+  if (currentLat != "" && currentLon != "") {
+    display.printf("Lat:%s Lon:%s", currentLat.c_str(), currentLon.c_str());
+  } else {
+    display.printf("Locating...");
+  }
+
+  // --- BOTTOM FOOTER ---
+  // Temp and Humidity
+  // small font again
+  display.setTextSize(1);
+  int yFooter = 54; // Moved down slightly
+  
+  int yFooter = 54; // Moved down slightly
+  
+  if (weatherAvailable) {
+     display.setCursor(0, yFooter);
+     
+     // Cycle display every 4 seconds
+     // 0-4s: Temp + Hum
+     // 4-8s: Rain Forecast
+     unsigned long nowInfo = millis() / 4000;
+     
+     if (nowInfo % 2 == 0) {
+       display.printf("Temp: %.1fC", currentTemp);
+       display.setCursor(70, yFooter);
+       display.printf("Hum: %d%%", currentHumidity);
+     } else {
+       display.printf("Rain: %d%% %d%% %d%% %d%%", rainProb[0], rainProb[1], rainProb[2], rainProb[3]);
+     }
+  } else {
+     display.setCursor(0, yFooter);
+     display.print("Loading Weather...");
+  }
+
+  display.display();
 }
 
 void startAP() {
@@ -300,10 +686,30 @@ void setup() {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
 
   Serial.begin(115200);
+
+  // Inicializar OLED
+  // SDA = 21, SCL = 22 (Default ESP32)
+  Wire.begin(21, 22); 
+  
+  // Dirección 0x3C es la más común para estos módulos
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { 
+    Serial.println(F("SSD1306 allocation failed"));
+  } else {
+    Serial.println(F("OLED Init OK"));
+    drawConnectingAnimation(0);
+  }
   pinMode(LED_PIN, OUTPUT);
   
   pinMode(CONTROL_PIN, OUTPUT);
-  digitalWrite(CONTROL_PIN, LOW); // Start OFF
+  // Restore state from preferences
+  Preferences io_prefs;
+  io_prefs.begin("io_config", true); // Read-only
+  currentMode = io_prefs.getInt("led_mode", MODE_OFF); 
+  io_prefs.end();
+  
+  // Apply initial state
+  if (currentMode == MODE_STEADY) digitalWrite(CONTROL_PIN, HIGH);
+  else digitalWrite(CONTROL_PIN, LOW);
   
   pinMode(RESET_PIN, INPUT_PULLUP);
   digitalWrite(LED_PIN, LOW); // Start with LED OFF
@@ -344,6 +750,12 @@ void handleResetButton() {
       preferences.clear();
       preferences.end();
       
+      // Also clear IO state
+      Preferences io_prefs;
+      io_prefs.begin("io_config", false);
+      io_prefs.clear();
+      io_prefs.end();
+      
       Serial.println("Credentials cleared. Restarting...");
       delay(1000);
       ESP.restart();
@@ -369,10 +781,81 @@ void loop() {
   
   // LED Logic: Only show status if NOT currently pressing the reset button
   if (!buttonPressed) {
+    // Status LED (Pin 2 usually) tracks Connection
     if (WiFi.status() == WL_CONNECTED) {
       digitalWrite(LED_PIN, HIGH);
     } else {
       digitalWrite(LED_PIN, LOW);
+    }
+    
+    // --- New Dashboard Logic ---
+    // Only update screen if in STA mode (connected)
+    if (WiFi.status() == WL_CONNECTED) {
+       // Weather update timer
+       if (millis() - lastWeatherUpdate > WEATHER_INTERVAL || lastWeatherUpdate == 0) {
+           updateWeather();
+       }
+       
+       // Sreen Refresh Rate (every 200ms is enough for seconds to feel real)
+       static unsigned long lastScreenUpdate = 0;
+       if (millis() - lastScreenUpdate > 200) {
+           drawFuturisticDashboard();
+           lastScreenUpdate = millis();
+       }
+    } else if (WiFi.getMode() == WIFI_AP) {
+       // Display AP Config Screen
+       static unsigned long lastAPScreenUpdate = 0;
+       if (millis() - lastAPScreenUpdate > 250) {
+           int frame = millis() / 250; 
+           drawConfigModeScreen(frame);
+           lastAPScreenUpdate = millis();
+       }
+    }
+
+
+    // -- Strobe Logic for Pin 5 --
+    if (currentMode == MODE_STROBE) {
+      unsigned long now = millis();
+      // Double flash sequence: Flash(50) - Gap(100) - Flash(50) - LongGap(1500)
+      switch (strobeStep) {
+        case 0: // Idle -> First Flash
+           digitalWrite(CONTROL_PIN, HIGH);
+           lastStrobeTime = now;
+           strobeStep = 1;
+           break;
+        case 1: // End First Flash
+           if (now - lastStrobeTime > 50) {
+             digitalWrite(CONTROL_PIN, LOW);
+             lastStrobeTime = now;
+             strobeStep = 2;
+           }
+           break;
+        case 2: // End Short Gap
+           if (now - lastStrobeTime > 100) {
+             digitalWrite(CONTROL_PIN, HIGH);
+             lastStrobeTime = now;
+             strobeStep = 3;
+           }
+           break;
+        case 3: // End Second Flash
+           if (now - lastStrobeTime > 50) {
+             digitalWrite(CONTROL_PIN, LOW);
+             lastStrobeTime = now;
+             strobeStep = 4;
+           }
+           break;
+        case 4: // End Long Gap
+           if (now - lastStrobeTime > 1500) {
+             strobeStep = 0; // Restart
+           }
+           break;
+      }
+    } else if (currentMode == MODE_STEADY) {
+       // Enforce HIGH just in case
+       digitalWrite(CONTROL_PIN, HIGH); 
+    } else {
+       // MODE_OFF
+       digitalWrite(CONTROL_PIN, LOW);
     }
   }
 }
