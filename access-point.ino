@@ -15,6 +15,30 @@
 #define OLED_RESET    -1 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
+String displayLang = "en"; // Global display language
+bool useFahrenheit = false; // Global temperature unit setting
+
+struct OLED_Dict {
+  const char* connecting;
+  const char* setup_req;
+  const char* weather;
+  const char* location;
+  const char* rain;
+  const char* syncing;
+  const char* loading_w;
+  const char* finding_l;
+  const char* loading_r;
+  const char* borrando;
+};
+
+OLED_Dict getOLEDDict() {
+  if (displayLang == "es") return {"CONECTANDO", "SETUP REQUERIDO", "CLIMA", "UBICACION", "PROB. LLUVIA (5d)", "Sincronizando...", "Cargando Clima...", "Buscando Ubicacion...", "Cargando Lluvia...", "BORRANDO..."};
+  if (displayLang == "zh") return {"连接中", "需要设置", "天气", "位置", "降雨概率 (5d)", "同步中...", "正在加载天气...", "正在寻找位置...", "正在加载降雨...", "正在擦除..."};
+  if (displayLang == "pt") return {"CONECTANDO", "CONFIG NECESSÁRIA", "CLIMA", "LOCALIZAÇÃO", "PROB. CHUVA (5d)", "Sincronizando...", "Carregando Clima...", "Buscando Local...", "Carregando Chuva...", "APAGANDO..."};
+  if (displayLang == "fr") return {"CONNEXION", "SORTIE D'USINE", "METEO", "LOCALISATION", "PROB. PLUE (5d)", "Synchronisation...", "Chargement météo...", "Recherche position...", "Chargement pluie...", "EFFACEMENT..."};
+  return {"CONNECTING", "SETUP REQUIRED", "WEATHER", "LOCATION", "RAIN PROB. (5d)", "Syncing...", "Loading Weather...", "Finding Location...", "Loading Rain...", "ERASING..."};
+}
+
 // Function to draw a dynamic WiFi connecting animation
 void drawConnectingAnimation(int frame) {
   display.clearDisplay();
@@ -25,7 +49,7 @@ void drawConnectingAnimation(int frame) {
   
   // Centered text
   display.setCursor(34, 4);
-  display.print(F("CONECTANDO"));
+  display.print(getOLEDDict().connecting);
   
   // --- BLUE ZONE (Bottom 48px) ---
   // Draw Antenna Base at bottom center
@@ -100,7 +124,7 @@ void drawConfigModeScreen(int frame) {
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(15, 0); 
-  display.print(F("SETUP REQUERIDO"));
+  display.print(getOLEDDict().setup_req);
 
   display.setCursor(0, 10);
   display.print(F("RED: Weather-Config")); // SSID en zona amarilla
@@ -132,7 +156,8 @@ void drawConfigModeScreen(int frame) {
 
   display.display();
 }
- String currentLat = "";
+
+String currentLat = "";
 String currentLon = "";
 int rainProb[5] = {0,0,0,0,0};
 
@@ -182,14 +207,15 @@ String getHTML(String title, String content, String script = "", bool showLang =
   
   html += "<script>\n";
   html += "const dict = {\n";
-  html += "  \"en\": {\"t_cfg\": \"WiFi Config\", \"l_ssid\": \"Select Network (SSID)\", \"l_pass\": \"Password\", \"b_save\": \"Save & Connect\", \"l_rescan\": \"Rescan (Restarts AP)\", \"t_saving\": \"Saving...\", \"msg_app\": \"Applying changes & restarting...\", \"t_saved\": \"Saved!\", \"msg_cred\": \"Credentials updated.\", \"msg_rest\": \"Device is restarting...\", \"t_err\": \"Error\", \"msg_miss\": \"Missing required fields.\", \"b_retry\": \"Try Again\", \"opt_no\": \"No networks found\", \"opt_sel\": \"Select a network...\", \"t_scan\": \"Scanning...\", \"msg_scan\": \"Restarting to scan networks. Reconnect in 10s.\", \"l_lang\": \"Language\", \"t_dash\": \"Smart Control\", \"l_led\": \"Main LED\", \"st_on\": \"ON\", \"st_off\": \"OFF\"},\n";
-  html += "  \"es\": {\"t_cfg\": \"Configuración WiFi\", \"l_ssid\": \"Seleccionar Red (SSID)\", \"l_pass\": \"Contraseña\", \"b_save\": \"Guardar y Conectar\", \"l_rescan\": \"Escanear de nuevo (Reinicia AP)\", \"t_saving\": \"Guardando...\", \"msg_app\": \"Aplicando cambios y reiniciando...\", \"t_saved\": \"¡Guardado!\", \"msg_cred\": \"Credenciales actualizadas.\", \"msg_rest\": \"El dispositivo se está reiniciando...\", \"t_err\": \"Error\", \"msg_miss\": \"Faltan campos requeridos.\", \"b_retry\": \"Intentar de nuevo\", \"opt_no\": \"No se encontraron redes\", \"opt_sel\": \"Selecciona una red...\", \"t_scan\": \"Escaneando...\", \"msg_scan\": \"Reiniciando para escanear. Reconecte en 10s.\", \"l_lang\": \"Lenguaje\", \"t_dash\": \"Control Inteligente\", \"l_led\": \"LED Principal\", \"st_on\": \"ENCENDIDO\", \"st_off\": \"APAGADO\"},\n";
-  html += "  \"zh\": {\"t_cfg\": \"WiFi 配置\", \"l_ssid\": \"选择网络 (SSID)\", \"l_pass\": \"密码\", \"b_save\": \"保存并连接\", \"l_rescan\": \"重新扫描 (重启 AP)\", \"t_saving\": \"保存中...\", \"msg_app\": \"正在应用更改并重启...\", \"t_saved\": \"已保存！\", \"msg_cred\": \"凭据已更新。\", \"msg_rest\": \"设备正在重启...\", \"t_err\": \"错误\", \"msg_miss\": \"缺少必填字段。\", \"b_retry\": \"重试\", \"opt_no\": \"未找到网络\", \"opt_sel\": \"请选择网络...\", \"t_scan\": \"扫描中...\", \"msg_scan\": \"正在重启以扫描网络。请在10秒后重新连接。\", \"l_lang\": \"语言\", \"t_dash\": \"智能控制\", \"l_led\": \"主灯\", \"st_on\": \"开启\", \"st_off\": \"关闭\"},\n";
-  html += "  \"pt\": {\"t_cfg\": \"Configuração WiFi\", \"l_ssid\": \"Selecionar Rede (SSID)\", \"l_pass\": \"Senha\", \"b_save\": \"Salvar e Conectar\", \"l_rescan\": \"Escanear novamente (Reinicia AP)\", \"t_saving\": \"Salvando...\", \"msg_app\": \"Aplicando alterações e reiniciando...\", \"t_saved\": \"Salvo!\", \"msg_cred\": \"Credenciais atualizadas.\", \"msg_rest\": \"O dispositivo está reiniciando...\", \"t_err\": \"Erro\", \"msg_miss\": \"Campos obrigatórios ausentes.\", \"b_retry\": \"Tentar novamente\", \"opt_no\": \"Nenhuma rede encontrada\", \"opt_sel\": \"Selecione uma rede...\", \"t_scan\": \"Escaneando...\", \"msg_scan\": \"Reiniciando para escanear. Reconecte in 10s.\", \"l_lang\": \"Idioma\", \"t_dash\": \"Controle Inteligente\", \"l_led\": \"LED Principal\", \"st_on\": \"LIGADO\", \"st_off\": \"DESLIGADO\"},\n";
-  html += "  \"fr\": {\"t_cfg\": \"Configuration WiFi\", \"l_ssid\": \"Sélectionner Réseau (SSID)\", \"l_pass\": \"Mot de passe\", \"b_save\": \"Enregistrer et Connecter\", \"l_rescan\": \"Scanner à nouveau (Redémarre AP)\", \"t_saving\": \"Enregistrement...\", \"msg_app\": \"Application des modifications...\", \"t_saved\": \"Enregistré !\", \"msg_cred\": \"Identifiants mis à jour.\", \"msg_rest\": \"Redémarrage de l'appareil...\", \"t_err\": \"Error\", \"msg_miss\": \"Champs requis manquants.\", \"b_retry\": \"Réessayer\", \"opt_no\": \"Aucun réseau trouvé\", \"opt_sel\": \"Sélectionnez un réseau...\", \"t_scan\": \"Scan en cours...\", \"msg_scan\": \"Redémarrage pour scanner. Reconnexion dans 10s.\", \"l_lang\": \"Langue\", \"t_dash\": \"Contrôle Intelligent\", \"l_led\": \"LED Principal\", \"st_on\": \"ALLUMÉ\", \"st_off\": \"ÉTEINT\"}\n";
+  html += "  \"en\": {\"t_cfg\": \"WiFi Config\", \"l_ssid\": \"Select Network (SSID)\", \"l_pass\": \"Password\", \"p_pass\": \"********\", \"b_save\": \"Save & Connect\", \"l_rescan\": \"Rescan (Restarts AP)\", \"t_saving\": \"Saving...\", \"msg_app\": \"Applying changes & restarting...\", \"t_saved\": \"Saved!\", \"msg_cred\": \"Credentials updated.\", \"msg_rest\": \"Device is restarting...\", \"t_err\": \"Error\", \"msg_miss\": \"Missing required fields.\", \"b_retry\": \"Try Again\", \"opt_no\": \"No networks found\", \"opt_sel\": \"Select a network...\", \"t_scan\": \"Scanning...\", \"msg_scan\": \"Restarting to scan networks. Reconnect in 10s.\", \"l_lang\": \"Language\", \"t_dash\": \"Smart Control\", \"l_led\": \"Main LED\", \"st_on\": \"ON\", \"st_off\": \"OFF\"},\n";
+  html += "  \"es\": {\"t_cfg\": \"Configuración WiFi\", \"l_ssid\": \"Seleccionar Red (SSID)\", \"l_pass\": \"Contraseña\", \"p_pass\": \"********\", \"b_save\": \"Guardar y Conectar\", \"l_rescan\": \"Escanear de nuevo (Reinicia AP)\", \"t_saving\": \"Guardando...\", \"msg_app\": \"Aplicando cambios y reiniciando...\", \"t_saved\": \"¡Guardado!\", \"msg_cred\": \"Credenciales actualizadas.\", \"msg_rest\": \"El dispositivo se está reiniciando...\", \"t_err\": \"Error\", \"msg_miss\": \"Faltan campos requeridos.\", \"b_retry\": \"Intentar de nuevo\", \"opt_no\": \"No se encontraron redes\", \"opt_sel\": \"Selecciona una red...\", \"t_scan\": \"Escaneando...\", \"msg_scan\": \"Reiniciando para escanear. Reconecte en 10s.\", \"l_lang\": \"Lenguaje\", \"t_dash\": \"Control Inteligente\", \"l_led\": \"LED Principal\", \"st_on\": \"ENCENDIDO\", \"st_off\": \"APAGADO\"},\n";
+  html += "  \"zh\": {\"t_cfg\": \"WiFi 配置\", \"l_ssid\": \"选择网络 (SSID)\", \"l_pass\": \"密码\", \"p_pass\": \"********\", \"b_save\": \"保存并连接\", \"l_rescan\": \"重新扫描 (重启 AP)\", \"t_saving\": \"保存中...\", \"msg_app\": \"正在应用更改并重启...\", \"t_saved\": \"已保存！\", \"msg_cred\": \"凭据已更新。\", \"msg_rest\": \"设备正在重启...\", \"t_err\": \"错误\", \"msg_miss\": \"缺少必填字段。\", \"b_retry\": \"重试\", \"opt_no\": \"未找到网络\", \"opt_sel\": \"请选择网络...\", \"t_scan\": \"扫描中...\", \"msg_scan\": \"正在重启以扫描网络。请在10秒后重新连接。\", \"l_lang\": \"语言\", \"t_dash\": \"智能控制\", \"l_led\": \"主灯\", \"st_on\": \"开启\", \"st_off\": \"关闭\"},\n";
+  html += "  \"pt\": {\"t_cfg\": \"Configuração WiFi\", \"l_ssid\": \"Selecionar Rede (SSID)\", \"l_pass\": \"Senha\", \"p_pass\": \"********\", \"b_save\": \"Salvar e Conectar\", \"l_rescan\": \"Escanear novamente (Reinicia AP)\", \"t_saving\": \"Salvando...\", \"msg_app\": \"Aplicando alterações e reiniciando...\", \"t_saved\": \"Salvo!\", \"msg_cred\": \"Credenciais atualizadas.\", \"msg_rest\": \"O dispositivo está reiniciando...\", \"t_err\": \"Erro\", \"msg_miss\": \"Campos obrigatórios ausentes.\", \"b_retry\": \"Tentar novamente\", \"opt_no\": \"Nenhuma rede encontrada\", \"opt_sel\": \"Selecione uma rede...\", \"t_scan\": \"Escaneando...\", \"msg_scan\": \"Reiniciando para escanear. Reconecte in 10s.\", \"l_lang\": \"Idioma\", \"t_dash\": \"Controle Inteligente\", \"l_led\": \"LED Principal\", \"st_on\": \"LIGADO\", \"st_off\": \"DESLIGADO\"},\n";
+  html += "  \"fr\": {\"t_cfg\": \"Configuration WiFi\", \"l_ssid\": \"Sélectionner Réseau (SSID)\", \"l_pass\": \"Mot de passe\", \"p_pass\": \"********\", \"b_save\": \"Enregistrer et Connecter\", \"l_rescan\": \"Scanner à nouveau (Redémarre AP)\", \"t_saving\": \"Enregistrement...\", \"msg_app\": \"Application des modifications...\", \"t_saved\": \"Enregistré !\", \"msg_cred\": \"Identifiants mis à jour.\", \"msg_rest\": \"Redémarrage de l'appareil...\", \"t_err\": \"Error\", \"msg_miss\": \"Champs requis manquants.\", \"b_retry\": \"Réessayer\", \"opt_no\": \"Aucun réseau trouvé\", \"opt_sel\": \"Sélectionnez un réseau...\", \"t_scan\": \"Scan en cours...\", \"msg_scan\": \"Redémarrage pour scanner. Reconnexion dans 10s.\", \"l_lang\": \"Langue\", \"t_dash\": \"Contrôle Intelligent\", \"l_led\": \"LED Principal\", \"st_on\": \"ALLUMÉ\", \"st_off\": \"ÉTEINT\"}\n";
   html += "};\n";
   html += "function setLang(l){";
   html += " localStorage.setItem('lang',l);";
+  html += " fetch('/set_lang?lang=' + l);"; // Update ESP32 display language
   html += " const t=dict[l]||dict['en'];";
   html += " document.querySelectorAll('[data-i18n]').forEach(e=>{";
   html += "  const k=e.getAttribute('data-i18n');";
@@ -247,7 +273,7 @@ void handleRoot() {
   content += "<select name='ssid' required>" + networksHTML + "</select>";
   content += "<label data-i18n='l_pass'>Contraseña</label>";
   content += "<div class='password-container'>";
-  content += "<input type='password' id='pass' name='password' required placeholder='********'>";
+  content += "<input type='password' id='pass' name='password' required placeholder='********' data-i18n='p_pass'>";
   content += "<span class='toggle-pass' id='toggleIcon' onclick='togglePass()'>👁️</span>";
   content += "</div>";
   content += "<button type='submit' data-i18n='b_save'>Guardar y Conectar</button>";
@@ -348,12 +374,6 @@ void handleSetMode() {
         io_prefs.begin("io_config", false);
         io_prefs.putInt("led_mode", currentMode);
         io_prefs.end();
-
-        // Immediate reaction for Steady/Off to feel responsive
-        if (currentMode == MODE_OFF) digitalWrite(CONTROL_PIN, LOW);
-        else if (currentMode == MODE_STEADY) digitalWrite(CONTROL_PIN, HIGH);
-        // Strobe is handled in loop()
-
         server.send(200, "text/plain", String(currentMode));
     } else {
         server.send(400, "text/plain", "Invalid Mode");
@@ -363,20 +383,53 @@ void handleSetMode() {
   }
 }
 
+void handleSetLang() {
+  if (server.hasArg("lang")) {
+    displayLang = server.arg("lang");
+    Preferences l_prefs;
+    l_prefs.begin("disp_cfg", false);
+    l_prefs.putString("lang", displayLang);
+    l_prefs.end();
+    server.send(200, "text/plain", "OK");
+  } else {
+    server.send(400, "text/plain", "Missing Lang");
+  }
+}
+
+void handleSetTempUnit() {
+  if (server.hasArg("unit")) {
+    useFahrenheit = (server.arg("unit") == "F");
+    Preferences d_prefs;
+    d_prefs.begin("disp_cfg", false);
+    d_prefs.putBool("isF", useFahrenheit);
+    d_prefs.end();
+    server.send(200, "text/plain", "OK");
+  } else {
+    server.send(400, "text/plain", "Missing Unit");
+  }
+}
+
 // Handler for the Dashboard (STA mode)
 void handleDashboard() {
   String content = "<h1 data-i18n='t_dash'>Smart Control</h1>";
   
-  // -- Switch 1: Steady Mode --
   content += "<div style='display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding:10px 0;'>";
-  content += "<div style='text-align:left;'><div><strong data-i18n='l_led'>Main LED</strong></div><div style='font-size:0.8rem; color:#666;'>Continuous</div></div>";
+  content += "<div style='text-align:left;'><div><strong data-i18n='l_led'>Main LED</strong></div><div style='font-size:0.8rem; color:#666;' data-i18n='d_led'>Continuous</div></div>";
   String steadyState = (currentMode == MODE_STEADY) ? "checked" : "";
   content += "<label class='switch'><input type='checkbox' id='sw_steady' onchange='setMode(this.checked ? 1 : 0)' " + steadyState + "><span class='slider round'></span></label>";
   content += "</div>";
 
+  // -- Temperature Unit --
+  content += "<div style='display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding:10px 0;'>";
+  content += "<div style='text-align:left;'><div><strong data-i18n='l_unit'>Temp Unit</strong></div><div style='font-size:0.8rem; color:#666;' data-i18n='d_unit'>Celsius / Fahrenheit</div></div>";
+  content += "<div style='display:flex; background:#f1f5f9; border-radius:0.5rem; padding:2px;'>";
+  content += "<button id='btn_c' onclick='setTempUnit(\"C\")' style='width:40px; margin:0; padding:4px; font-size:0.8rem; background:" + String(!useFahrenheit ? "var(--primary)" : "transparent") + "; color:" + String(!useFahrenheit ? "white" : "#64748b") + ";'>°C</button>";
+  content += "<button id='btn_f' onclick='setTempUnit(\"F\")' style='width:40px; margin:0; padding:4px; font-size:0.8rem; background:" + String(useFahrenheit ? "var(--primary)" : "transparent") + "; color:" + String(useFahrenheit ? "white" : "#64748b") + ";'>°F</button>";
+  content += "</div></div>";
+
   // -- Switch 2: Strobe Mode (Airplane) --
   content += "<div style='display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding:10px 0;'>";
-  content += "<div style='text-align:left;'><div><strong data-i18n='l_strobe'>Airplane Mode</strong></div><div style='font-size:0.8rem; color:#666;'>Strobe Effect</div></div>";
+  content += "<div style='text-align:left;'><div><strong data-i18n='l_strobe'>Airplane Mode</strong></div><div style='font-size:0.8rem; color:#666;' data-i18n='d_strobe'>Strobe Effect</div></div>";
   String strobeState = (currentMode == MODE_STROBE) ? "checked" : "";
   content += "<label class='switch'><input type='checkbox' id='sw_strobe' onchange='setMode(this.checked ? 2 : 0)' " + strobeState + "><span class='slider round'></span></label>";
   content += "</div>";
@@ -396,7 +449,7 @@ void handleDashboard() {
   String screens[5] = {"Clima", "Ubicacion", "Lluvia", "Fecha/Hora", "Estado"};
   for(int i=0; i<5; i++) {
      bool en = (enabledScreensMask >> i) & 1;
-     content += "<label class='opt-label'><input type='checkbox' class='chk_scr' value='" + String(i) + "' " + (en ? "checked" : "") + "> <span>" + screens[i] + "</span></label>";
+     content += "<label class='opt-label'><input type='checkbox' class='chk_scr' value='" + String(i) + "' " + (en ? "checked" : "") + "> <span data-i18n='s_" + String(i) + "'>" + screens[i] + "</span></label>";
   }
   content += "</div>";
 
@@ -405,20 +458,34 @@ void handleDashboard() {
   content += "<p style='font-size:0.875rem; color:#6b7280; margin-bottom:0.75rem; text-align:left;' data-i18n='msg_static'>Select screen to show:</p>";
   content += "<select id='sel_static' style='margin-top:0;'>";
   for(int i=0; i<5; i++) {
-     content += "<option value='" + String(i) + "' " + (staticScreenIndex == i ? "selected" : "") + ">" + screens[i] + "</option>";
+     content += "<option value='" + String(i) + "' " + (staticScreenIndex == i ? "selected" : "") + " data-i18n='s_" + String(i) + "'>" + screens[i] + "</option>";
   }
   content += "</select>";
   content += "</div>";
   
   content += "<button onclick='saveDispConfig()' data-i18n='b_save_disp' style='margin-top:1.5rem;'>Save Display Settings</button>";
 
+  String extraDict = "Object.assign(dict.en, {'l_unit': 'Temp Unit', 'd_unit': 'Celsius / Fahrenheit', 'l_strobe': 'Airplane Mode', 't_disp_cfg': 'Display Settings', 'l_cycle': 'Cycle Mode', 'l_static': 'Static Mode', 'msg_cycle': 'Select screens to show:', 'msg_static': 'Select screen to lock:', 'b_save_disp': 'Update Display', 'd_led': 'Continuous', 'd_strobe': 'Strobe Effect', 's_0': 'Weather', 's_1': 'Location', 's_2': 'Rain', 's_3': 'Date/Time', 's_4': 'Status'});";
+  extraDict += "Object.assign(dict.es, {'l_unit': 'Unidad Temp', 'd_unit': 'Celsius / Fahrenheit', 'l_strobe': 'Modo Avión', 't_disp_cfg': 'Configuración Pantalla', 'l_cycle': 'Modo Carrusel', 'l_static': 'Modo Fijo', 'msg_cycle': 'Pantallas visibles:', 'msg_static': 'Pantalla fija:', 'b_save_disp': 'Actualizar Pantalla', 'd_led': 'Continuo', 'd_strobe': 'Efecto Estroboscópico', 's_0': 'Clima', 's_1': 'Ubicación', 's_2': 'Lluvia', 's_3': 'Fecha/Hora', 's_4': 'Estado'});";
+  extraDict += "Object.assign(dict.zh, {'l_unit': '温度单位', 'd_unit': '摄氏度 / 华氏度', 'l_strobe': '飞机模式', 't_disp_cfg': '显示设置', 'l_cycle': '循环模式', 'l_static': '静态模式', 'msg_cycle': '选择显示的屏幕:', 'msg_static': '选择锁定的屏幕:', 'b_save_disp': '更新显示', 'd_led': '连续', 'd_strobe': '闪烁效果', 's_0': '天气', 's_1': '位置', 's_2': '降雨', 's_3': '日期/时间', 's_4': '状态'});";
+  extraDict += "Object.assign(dict.pt, {'l_unit': 'Unidade Temp', 'd_unit': 'Celsius / Fahrenheit', 'l_strobe': 'Modo Avião', 't_disp_cfg': 'Configurações de Tela', 'l_cycle': 'Modo Ciclo', 'l_static': 'Modo Estático', 'msg_cycle': 'Telas visíveis:', 'msg_static': 'Tela fija:', 'b_save_disp': 'Actualizar Tela', 'd_led': 'Contínuo', 'd_strobe': 'Efeito Estroboscópico', 's_0': 'Clima', 's_1': 'Localização', 's_2': 'Chuva', 's_3': 'Data/Hora', 's_4': 'Status'});";
+  extraDict += "Object.assign(dict.fr, {'l_unit': 'Unité Temp', 'd_unit': 'Celsius / Fahrenheit', 'l_strobe': 'Mode Avion', 't_disp_cfg': 'Paramètres Écran', 'l_cycle': 'Mode Cycle', 'l_static': 'Mode Fixe', 'msg_cycle': 'Écrans visibles:', 'msg_static': 'Écran fixe:', 'b_save_disp': 'Mettre à jour', 'd_led': 'Continu', 'd_strobe': 'Effet Stroboscope', 's_0': 'Météo', 's_1': 'Localisation', 's_2': 'Pluie', 's_3': 'Date/Heure', 's_4': 'Statut'});";
 
-  String script = "function setMode(m) {";
+  String script = extraDict + "function setMode(m) {";
   // Mutually exclusive UI logic
   script += " if(m==1) document.getElementById('sw_strobe').checked = false;";
   script += " if(m==2) document.getElementById('sw_steady').checked = false;";
   // API Call
   script += " fetch('/set_mode?mode=' + m).then(r => r.text()).then(res => { console.log('Mode set to ' + res); });";
+  script += "}";
+
+  script += "function setTempUnit(u) {";
+  script += " const isF = (u=='F');";
+  script += " document.getElementById('btn_f').style.background = isF ? 'var(--primary)' : 'transparent';";
+  script += " document.getElementById('btn_f').style.color = isF ? 'white' : '#64748b';";
+  script += " document.getElementById('btn_c').style.background = !isF ? 'var(--primary)' : 'transparent';";
+  script += " document.getElementById('btn_c').style.color = !isF ? 'white' : '#64748b';";
+  script += " fetch('/set_temp_unit?unit=' + u);";
   script += "}";
   
   script += "function toggleDispMode() {";
@@ -436,16 +503,7 @@ void handleDashboard() {
   script += " fetch('/set_display?mode='+m+'&mask='+mask+'&static='+s).then(r=>{ btn.innerHTML='Saved!'; setTimeout(()=>{btn.innerHTML=old}, 2000); });";
   script += "}";
   
-  // Update dictionary with new keys
-  String extraDict = "<script>";
-  extraDict += "Object.assign(dict.en, {'l_strobe': 'Airplane Mode', 't_disp_cfg': 'Display Settings', 'l_cycle': 'Cycle Mode', 'l_static': 'Static Mode', 'msg_cycle': 'Select screens to show:', 'msg_static': 'Select screen to lock:', 'b_save_disp': 'Update Display'});";
-  extraDict += "Object.assign(dict.es, {'l_strobe': 'Modo Avión', 't_disp_cfg': 'Configuración Pantalla', 'l_cycle': 'Modo Carrusel', 'l_static': 'Modo Fijo', 'msg_cycle': 'Pantallas visibles:', 'msg_static': 'Pantalla fija:', 'b_save_disp': 'Actualizar Pantalla'});";
-  extraDict += "Object.assign(dict.zh, {'l_strobe': '飞机模式', 't_disp_cfg': '显示设置', 'l_cycle': '循环模式', 'l_static': '静态模式', 'msg_cycle': '选择显示的屏幕:', 'msg_static': '选择锁定的屏幕:', 'b_save_disp': '更新显示'});";
-  extraDict += "Object.assign(dict.pt, {'l_strobe': 'Modo Avião', 't_disp_cfg': 'Configurações de Tela', 'l_cycle': 'Modo Ciclo', 'l_static': 'Modo Estático', 'msg_cycle': 'Telas visíveis:', 'msg_static': 'Tela fixa:', 'b_save_disp': 'Atualizar Tela'});";
-  extraDict += "Object.assign(dict.fr, {'l_strobe': 'Mode Avion', 't_disp_cfg': 'Paramètres Écran', 'l_cycle': 'Mode Cycle', 'l_static': 'Mode Fixe', 'msg_cycle': 'Écrans visibles:', 'msg_static': 'Écran fixe:', 'b_save_disp': 'Mettre à jour'});";
-  extraDict += "</script>";
-  
-  server.send(200, "text/html", getHTML("Smart Dashboard", content + extraDict, script));
+  server.send(200, "text/html", getHTML("Smart Dashboard", content, script));
 }
 
 void handleNotFound() {
@@ -496,6 +554,8 @@ void setupWiFi() {
     server.on("/", handleDashboard);
     server.on("/set_mode", handleSetMode);
     server.on("/set_display", handleSetDisplayConfig);
+    server.on("/set_lang", handleSetLang);
+    server.on("/set_temp_unit", handleSetTempUnit);
     server.onNotFound(handleNotFound);
     server.begin();
     Serial.println("Dashboard Server Started");
@@ -671,10 +731,18 @@ void drawHeader(struct tm timeinfo) {
 }
 
 void drawScreenWeather(float temp, int hum) {
+  // Conversión a Fahrenheit si es necesario
+  float displayTemp = temp;
+  const char* unitStr = "C";
+  if (useFahrenheit) {
+    displayTemp = (temp * 9.0 / 5.0) + 32.0;
+    unitStr = "F";
+  }
+
   // Title
   display.setTextSize(1);
   display.setCursor(48, 16);
-  display.print(F("CLIMA"));
+  display.print(getOLEDDict().weather);
 
   // Thermometer position
   int tx = 13;
@@ -683,7 +751,7 @@ void drawScreenWeather(float temp, int hum) {
   // Data Temperatura
   display.setTextSize(2);
   display.setCursor(30, 32);
-  display.printf("%.1fC", temp);
+  display.printf("%.1f%s", displayTemp, unitStr);
 
   // Data Humedad
   display.setTextSize(1);
@@ -719,7 +787,7 @@ void drawScreenLocation(String lat, String lon) {
   // Title (masked box)
   display.fillRect(35, 17, 58, 10, SSD1306_BLACK); 
   display.setCursor(40, 18);
-  display.print(F("UBICACION"));
+  display.print(getOLEDDict().location);
   
   // Coords
   display.setCursor(2, 54);
@@ -731,7 +799,7 @@ void drawScreenLocation(String lat, String lon) {
 
 void drawScreenRain(int probs[5]) {
   display.setCursor(15, 18);
-  display.print(F("PROB. LLUVIA (5d)"));
+  display.print(getOLEDDict().rain);
   
   // Bar Chart for 5 days
   for(int i=0; i<5; i++) {
@@ -834,6 +902,11 @@ void drawScreenStatus() {
   display.drawRect(95, 34, 20, 10, SSD1306_WHITE);
   display.fillRect(97, 36, 16, 6, SSD1306_WHITE); // 100% fixed
   display.fillRect(115, 36, 2, 6, SSD1306_WHITE); // Tip
+
+  // URL de conexion al portal
+  display.setTextSize(1);
+  display.setCursor(0, 56);
+  display.print(F("weatherstation.local"));
 }
 
 void drawFuturisticDashboard() {
@@ -870,7 +943,7 @@ void drawFuturisticDashboard() {
     display.setCursor(20, 30);
     display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
-    display.println(F("Sincronizando..."));
+    display.println(getOLEDDict().syncing);
     display.display();
     return;
   }
@@ -886,21 +959,21 @@ void drawFuturisticDashboard() {
       if(weatherAvailable) drawScreenWeather(currentTemp, currentHumidity);
       else {
         display.setCursor(20, 30);
-        display.print(F("Cargando Clima..."));
+        display.print(getOLEDDict().loading_w);
       }
       break;
     case 1: // Location
       if(currentLat != "") drawScreenLocation(currentLat, currentLon);
       else {
         display.setCursor(20, 30);
-        display.print(F("Buscando Ubicacion..."));
+        display.print(getOLEDDict().finding_l);
       }
       break;
     case 2: // Rain
       if(weatherAvailable) drawScreenRain(rainProb);
       else {
         display.setCursor(20, 30);
-        display.print(F("Cargando Lluvia..."));
+        display.print(getOLEDDict().loading_r);
       }
       break;
     case 3: // Time & Date (Custom Layout)
@@ -940,6 +1013,7 @@ void startAP() {
   server.on("/", handleRoot);
   server.on("/save", handleSave);
   server.on("/rescan", handleRescan);
+  server.on("/set_lang", handleSetLang);
   // Important: Catch-all handler for captive portal redirection
   server.onNotFound(handleNotFound); 
   server.begin();
@@ -984,6 +1058,8 @@ void setup() {
   displayMode = d_prefs.getInt("mode", 0);
   enabledScreensMask = d_prefs.getInt("mask", 31);
   staticScreenIndex = d_prefs.getInt("static", 0);
+  displayLang = d_prefs.getString("lang", "en");
+  useFahrenheit = d_prefs.getBool("isF", false);
   d_prefs.end();
   
   // Apply initial state
@@ -1074,7 +1150,7 @@ void handleResetButton() {
       display.setTextColor(SSD1306_WHITE);
       display.setTextSize(2);
       display.setCursor(10, 25);
-      display.print(F("BORRANDO..."));
+      display.print(getOLEDDict().borrando);
       display.display();
       
       // Blink LED rapidly to indicate reset action
